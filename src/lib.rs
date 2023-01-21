@@ -1,4 +1,4 @@
-mod dispatcher;
+mod builtins;
 mod engine;
 pub(crate) mod error;
 mod msg_channel;

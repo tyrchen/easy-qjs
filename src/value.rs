@@ -1,10 +1,13 @@
+use std::fmt;
+
 use crate::JsonValue;
+use itertools::Itertools;
 use js::{Array, Ctx, FromAtom, FromJs, IntoJs, Null, Object};
 use serde::Serialize;
 use serde_json::{json, Value};
 
 impl<'js> FromJs<'js> for JsonValue {
-    fn from_js(ctx: Ctx<'js>, val: js::Value<'js>) -> Result<Self, js::Error> {
+    fn from_js(_ctx: Ctx<'js>, val: js::Value<'js>) -> Result<Self, js::Error> {
         let v = match val {
             val if val.type_name() == "null" => Value::Null,
             val if val.type_name() == "undefined" => Value::Null,
@@ -20,7 +23,7 @@ impl<'js> FromJs<'js> for JsonValue {
                 let mut x = Vec::with_capacity(v.len());
                 for i in v.iter() {
                     let v = i?;
-                    let v = JsonValue::from_js(ctx, v)?;
+                    let v = JsonValue::from_js(_ctx, v)?;
                     x.push(v.into());
                 }
                 Value::Array(x)
@@ -38,10 +41,10 @@ impl<'js> FromJs<'js> for JsonValue {
                 for i in v.props() {
                     let (k, v) = i?;
                     let k = String::from_atom(k)?;
-                    let v = JsonValue::from_js(ctx, v)?;
+                    let v = JsonValue::from_js(_ctx, v)?;
                     x[k] = v.into();
                 }
-                x.into()
+                x
             }
             _ => Value::Null,
         };
@@ -111,5 +114,25 @@ impl JsonValue {
 
     pub fn object<T: Serialize>(obj: T) -> Self {
         Self(json!(obj))
+    }
+}
+
+impl fmt::Display for JsonValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.0 {
+            Value::Null => write!(f, "null"),
+            Value::Bool(v) => write!(f, "{}", v),
+            Value::Number(v) => write!(f, "{}", v),
+            Value::String(v) => write!(f, "{}", v),
+            Value::Array(v) => {
+                write!(f, "[")?;
+                write!(f, "{}", v.iter().join(", "))?;
+                write!(f, "]")
+            }
+            Value::Object(_) => {
+                let s = serde_json::to_string_pretty(&self.0).map_err(|_| fmt::Error)?;
+                write!(f, "{}", s)
+            }
+        }
     }
 }

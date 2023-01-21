@@ -1,5 +1,5 @@
 use crate::{
-    dispatcher::{disp::Dispatcher, Disp},
+    builtins::{con::Console, disp::Dispatcher, Con, Disp},
     error::*,
     JsEngine, JsonValue, MsgChannel, Processor,
 };
@@ -18,6 +18,39 @@ impl JsEngine {
         let ctx = Context::full(&rt).context(JsContextSnafu)?;
         rt.spawn_executor(Tokio);
 
+        let engine = Self {
+            runtime: rt,
+            context: ctx,
+            sender: tx,
+        };
+
+        let names: Vec<(&str, &str)> = processors
+            .iter()
+            .map(|(ns, name, _)| (ns.as_str(), name.as_str()))
+            .collect();
+        engine.init_globals(&names)?;
+
+        engine.run_processors(rx, processors);
+        Ok(engine)
+    }
+
+    pub async fn run(&self, code: &str) -> Result<JsonValue, Error> {
+        let ret: Result<Promise<JsonValue>, js::Error> = self.context.with(|ctx| {
+            let src = format!(r#"export default async function() {{ {} }}"#, code);
+            debug!("code to execute: {}", src);
+            let m = ctx.compile("script", src)?;
+            let fun = m.get::<_, Function>("default")?;
+
+            fun.call(())
+        });
+        ret.context(JsExecuteSnafu)?.await.context(JsExecuteSnafu)
+    }
+
+    fn run_processors(
+        &self,
+        rx: flume::Receiver<MsgChannel>,
+        processors: Vec<(String, String, Box<dyn Processor>)>,
+    ) {
         let processors: HashMap<(String, String), Box<dyn Processor>> = processors
             .into_iter()
             .map(|(ns, name, processor)| ((ns, name), processor))
@@ -42,30 +75,18 @@ impl JsEngine {
                 }
             }
         });
-
-        let engine = Self {
-            runtime: rt,
-            context: ctx,
-            sender: tx,
-        };
-        Ok(engine)
     }
 
-    pub async fn run(&self, code: &str) -> Result<JsonValue, Error> {
-        let ret: Result<Promise<JsonValue>, js::Error> = self.context.with(|ctx| {
+    fn init_globals(&self, _names: &[(&str, &str)]) -> Result<(), Error> {
+        let ret: Result<(), js::Error> = self.context.with(|ctx| {
             let glob = ctx.globals();
-            glob.init_def::<Print>()?;
+            glob.init_def::<Con>()?;
             glob.init_def::<Disp>()?;
+            glob.set("console", Console)?;
             glob.set("dispatcher", Dispatcher::new(self.sender.clone()))?;
-
-            let src = format!(r#"export default async function() {{ {} }}"#, code);
-            debug!("code to execute: {}", src);
-            let m = ctx.compile("script", src)?;
-            let fun = m.get::<_, Function>("default")?;
-
-            fun.call(())
+            Ok(())
         });
-        ret.context(JsExecuteSnafu)?.await.context(JsExecuteSnafu)
+        ret.context(JsExecuteSnafu)
     }
 }
 
@@ -86,12 +107,15 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn js_engine_should_work() -> Result<()> {
+        tracing_subscriber::fmt::init();
         let engine = JsEngine::create(vec![(
             "auth".into(),
             "create_token".into(),
             Box::new(auth_create_token) as Box<dyn Processor>,
         )])?;
-        engine.run("print('hello world')").await?;
+        engine
+            .run("let a = 1;console.log(`hello world ${a}`, a)")
+            .await?;
         let ret = engine
             .run("return dispatcher.dispatch('auth', 'create_token', {a: 1})")
             .await?;

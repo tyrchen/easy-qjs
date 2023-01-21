@@ -5,7 +5,7 @@ pub(crate) type Result<T, E = Error> = std::result::Result<T, E>;
 #[derive(Debug, Snafu)]
 #[snafu(visibility(pub(crate)))]
 pub enum Error {
-    // faied to create js runtime
+    // failed to create js runtime
     #[snafu(display("Failed to create javascript runtime"))]
     JsRuntime { source: js::Error },
     // failed to create js context

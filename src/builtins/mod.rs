@@ -1,5 +1,5 @@
 mod console;
 mod dispatcher;
 
-pub use console::*;
-pub use dispatcher::*;
+pub(crate) use console::*;
+pub(crate) use dispatcher::*;

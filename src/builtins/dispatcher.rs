@@ -4,11 +4,11 @@ use js::Rest;
 #[js::bind(object, public)]
 #[quickjs(bare)]
 #[allow(non_upper_case_globals)]
-pub mod disp {
+pub(crate) mod disp {
     use crate::{JsonValue, MsgChannel};
     use tracing::{info, warn};
 
-    #[derive(Clone)]
+    #[derive(Debug, Clone)]
     pub struct Dispatcher {
         #[quickjs(hide)]
         pub(super) sender: flume::Sender<MsgChannel>,
@@ -48,6 +48,6 @@ pub mod disp {
 #[js::bind(object, public)]
 #[quickjs(rename = "fetch")]
 #[allow(unused_variables)]
-pub async fn fetch(args: Rest<JsonValue>) -> Result<JsonValue, js::Error> {
+pub(crate) async fn fetch(args: Rest<JsonValue>) -> Result<JsonValue, js::Error> {
     Ok(JsonValue::default())
 }

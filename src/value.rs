@@ -11,15 +11,17 @@ impl<'js> FromJs<'js> for JsonValue {
         let v = match val {
             val if val.type_name() == "null" => Value::Null,
             val if val.type_name() == "undefined" => Value::Null,
-            val if val.is_bool() => val.as_bool().unwrap().into(),
-            val if val.is_string() => match val.into_string().unwrap().to_string() {
-                Ok(v) => Value::String(v),
-                Err(e) => return Err(e),
-            },
-            val if val.is_int() => val.as_int().unwrap().into(),
-            val if val.is_float() => val.as_float().unwrap().into(),
+            val if val.is_bool() => val.as_bool().expect("checked bool").into(),
+            val if val.is_string() => {
+                match val.into_string().expect("checked string").to_string() {
+                    Ok(v) => Value::String(v),
+                    Err(e) => return Err(e),
+                }
+            }
+            val if val.is_int() => val.as_int().expect("checked int").into(),
+            val if val.is_float() => val.as_float().expect("checked float").into(),
             val if val.is_array() => {
-                let v = val.as_array().unwrap();
+                let v = val.as_array().expect("checked array");
                 let mut x = Vec::with_capacity(v.len());
                 for i in v.iter() {
                     let v = i?;
@@ -30,7 +32,7 @@ impl<'js> FromJs<'js> for JsonValue {
             }
             val if val.is_object() => {
                 // Extract the value as an object
-                let v = val.into_object().unwrap();
+                let v = val.into_object().expect("checked object");
 
                 // Check to see if this object is a function. We don't support it
                 if v.as_function().is_some() {
@@ -59,11 +61,20 @@ impl<'js> IntoJs<'js> for JsonValue {
             Value::Bool(v) => Ok(js::Value::new_bool(ctx, v)),
             Value::Number(num) => {
                 if num.is_f64() {
-                    Ok(js::Value::new_float(ctx, num.as_f64().unwrap()))
+                    Ok(js::Value::new_float(
+                        ctx,
+                        num.as_f64().expect("checked f64"),
+                    ))
                 } else if num.is_i64() {
-                    Ok(js::Value::new_number(ctx, num.as_i64().unwrap() as _))
+                    Ok(js::Value::new_number(
+                        ctx,
+                        num.as_i64().expect("checked f64") as _,
+                    ))
                 } else {
-                    Ok(js::Value::new_number(ctx, num.as_u64().unwrap() as _))
+                    Ok(js::Value::new_number(
+                        ctx,
+                        num.as_u64().expect("checked f64") as _,
+                    ))
                 }
             }
             Value::String(v) => js::String::from_str(ctx, &v)?.into_js(ctx),
@@ -134,5 +145,58 @@ impl fmt::Display for JsonValue {
                 write!(f, "{}", s)
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{builtins::con::Console, JsEngine};
+    use anyhow::Result;
+    use js::Function;
+
+    #[js::bind(object, public)]
+    #[quickjs(bare, rename = "print")]
+    #[allow(unused_variables)]
+    fn print(s: String) {
+        println!("{}", s);
+    }
+
+    #[tokio::test]
+    async fn json_value_should_be_converted_to_js() -> Result<()> {
+        let engine = JsEngine::new(vec![])?;
+        let _ret: Result<()> = engine.context.with(|ctx| {
+            let v = JsonValue::object(json!({
+              "name": "John",
+              "age": 30,
+              "cars": [
+                "Ford",
+                "BMW",
+                "Fiat"
+              ]
+            }));
+            let js = v.clone().into_js(ctx)?;
+            assert_eq!(js.type_name(), "object");
+            let v1 = JsonValue::from_js(ctx, js)?;
+            assert_eq!(v, v1);
+            Ok(())
+        });
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn js_object_might_be_converted_as_null() -> Result<()> {
+        let engine = JsEngine::new(vec![])?;
+        let _ret: Result<()> = engine.context.with(|ctx| {
+            let obj = Object::new(ctx)?;
+            obj.set("name", "John")?;
+            obj.set("obj", Console)?;
+            obj.set("fun", Function::new(ctx, print))?;
+            let js = obj.into_js(ctx)?;
+            let v = JsonValue::from_js(ctx, js)?;
+            assert_eq!(v.0, json!({ "name": "John", "obj": {}, "fun": null }));
+            Ok(())
+        });
+        Ok(())
     }
 }

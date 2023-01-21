@@ -1,5 +1,5 @@
 use crate::{
-    builtins::{con::Console, disp::Dispatcher, Con, Disp},
+    builtins::{disp::Dispatcher, Disp},
     error::*,
     JsEngine, JsonValue, MsgChannel, Processor,
 };
@@ -49,9 +49,14 @@ impl JsEngine {
     fn init_globals(&self, _names: &[(&str, &str)]) -> Result<(), Error> {
         let ret: Result<(), js::Error> = self.context.with(|ctx| {
             let glob = ctx.globals();
-            glob.init_def::<Con>()?;
+            #[cfg(feature = "console")]
+            {
+                use crate::builtins::{con::Console, Con};
+                glob.init_def::<Con>()?;
+                glob.set("console", Console)?;
+            }
+
             glob.init_def::<Disp>()?;
-            glob.set("console", Console)?;
             glob.set("dispatcher", Dispatcher::new(self.sender.clone()))?;
             Ok(())
         });
@@ -113,6 +118,7 @@ mod tests {
             "create_token",
             Box::new(auth_create_token) as Box<dyn Processor>,
         )])?;
+        #[cfg(feature = "console")]
         engine
             .run("let a = 1;console.log(`hello world ${a}`, a)")
             .await?;

@@ -151,7 +151,9 @@ impl fmt::Display for JsonValue {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{builtins::con::Console, JsEngine};
+    #[cfg(feature = "console")]
+    use crate::builtins::con::Console;
+    use crate::JsEngine;
     use anyhow::Result;
     use js::Function;
 
@@ -190,11 +192,15 @@ mod tests {
         let _ret: Result<()> = engine.context.with(|ctx| {
             let obj = Object::new(ctx)?;
             obj.set("name", "John")?;
+            #[cfg(feature = "console")]
             obj.set("obj", Console)?;
             obj.set("fun", Function::new(ctx, print))?;
             let js = obj.into_js(ctx)?;
             let v = JsonValue::from_js(ctx, js)?;
+            #[cfg(feature = "console")]
             assert_eq!(v.0, json!({ "name": "John", "obj": {}, "fun": null }));
+            #[cfg(not(feature = "console"))]
+            assert_eq!(v.0, json!({ "name": "John", "fun": null }));
             Ok(())
         });
         Ok(())

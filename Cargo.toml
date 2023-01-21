@@ -2,6 +2,16 @@
 name = "easy-qjs"
 version = "0.1.1"
 edition = "2021"
+license = "MIT"
+documentation = "https://docs.rs/easy-qjs"
+repository = "https://github.com/tyrchen/easy-qjs"
+homepage = "https://github.com/tyrchen/easy-qjs"
+description = """
+A simple library to embed quickjs into your rust project.
+"""
+readme = "README.md"
+categories = ["development-tools"]
+keywords = ["quickjs"]
 
 [features]
 default = ["console"]

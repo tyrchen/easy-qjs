@@ -166,7 +166,7 @@ mod tests {
 
     #[tokio::test]
     async fn json_value_should_be_converted_to_js() -> Result<()> {
-        let engine = JsEngine::new(vec![])?;
+        let (engine, _) = JsEngine::create()?;
         let _ret: Result<()> = engine.context.with(|ctx| {
             let v = JsonValue::object(json!({
               "name": "John",
@@ -188,7 +188,7 @@ mod tests {
 
     #[tokio::test]
     async fn js_object_might_be_converted_as_null() -> Result<()> {
-        let engine = JsEngine::new(vec![])?;
+        let (engine, _) = JsEngine::create()?;
         let _ret: Result<()> = engine.context.with(|ctx| {
             let obj = Object::new(ctx)?;
             obj.set("name", "John")?;

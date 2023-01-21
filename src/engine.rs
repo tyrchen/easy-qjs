@@ -1,15 +1,15 @@
 use crate::{
     builtins::{disp::Dispatcher, Disp},
     error::*,
-    JsEngine, JsonValue, MsgChannel, Processor,
+    JsEngine, JsonValue, MsgChannel,
 };
-use std::{collections::HashMap, fmt};
+use std::fmt;
 
 use js::{Context, Function, Promise, Tokio};
 use snafu::ResultExt;
-use tracing::{debug, info, warn};
+use tracing::debug;
 impl JsEngine {
-    pub fn new(processors: Vec<(&str, &str, Box<dyn Processor>)>) -> Result<Self, Error> {
+    pub fn create() -> Result<(Self, flume::Receiver<MsgChannel>)> {
         let (tx, rx) = flume::unbounded::<MsgChannel>();
         let rt = js::Runtime::new().context(JsRuntimeSnafu)?;
         rt.set_max_stack_size(256 * 1024);
@@ -23,12 +23,15 @@ impl JsEngine {
             context: ctx,
             sender: tx,
         };
+        engine.init_globals()?;
+        Ok((engine, rx))
+    }
 
-        let names: Vec<(&str, &str)> = processors
-            .iter()
-            .map(|(ns, name, _)| (*ns, *name))
-            .collect();
-        engine.init_globals(&names)?;
+    #[cfg(feature = "builtin_processor")]
+    pub fn create_with_processors(
+        processors: Vec<(&str, &str, Box<dyn crate::Processor>)>,
+    ) -> Result<Self, Error> {
+        let (engine, rx) = Self::create()?;
 
         run_processors(rx, processors);
         Ok(engine)
@@ -46,7 +49,7 @@ impl JsEngine {
         ret.context(JsExecuteSnafu)?.await.context(JsExecuteSnafu)
     }
 
-    fn init_globals(&self, _names: &[(&str, &str)]) -> Result<(), Error> {
+    fn init_globals(&self) -> Result<(), Error> {
         let ret: Result<(), js::Error> = self.context.with(|ctx| {
             let glob = ctx.globals();
             #[cfg(feature = "console")]
@@ -64,59 +67,67 @@ impl JsEngine {
     }
 }
 
-fn run_processors(
-    rx: flume::Receiver<MsgChannel>,
-    processors: Vec<(&str, &str, Box<dyn Processor>)>,
-) {
-    let processors: HashMap<(String, String), Box<dyn Processor>> = processors
-        .into_iter()
-        .map(|(ns, name, processor)| ((ns.to_owned(), name.to_owned()), processor))
-        .collect();
-
-    tokio::spawn(async move {
-        while let Ok(msg) = rx.recv_async().await {
-            let name = format!("{}.{}", msg.namespace, msg.name);
-            info!("Got request for {name}: {:#?}", msg.args);
-            let processor = match processors.get(&(msg.namespace, msg.name)) {
-                Some(p) => p,
-                None => {
-                    if let Err(e) = msg.res.send(Err(format!("{} not found", name))) {
-                        warn!("send error: {:?}", e);
-                    };
-                    continue;
-                }
-            };
-            let ret = processor.call(msg.args).await;
-            if let Err(e) = msg.res.send(ret) {
-                warn!("send error: {:?}", e);
-            }
-        }
-    });
-}
-
 impl fmt::Debug for JsEngine {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("JsEngine").finish()
     }
 }
 
+#[cfg(feature = "builtin_processor")]
+fn run_processors(
+    rx: flume::Receiver<MsgChannel>,
+    processors: Vec<(&str, &str, Box<dyn crate::Processor>)>,
+) {
+    let processors: std::collections::HashMap<(String, String), Box<dyn crate::Processor>> =
+        processors
+            .into_iter()
+            .map(|(ns, name, processor)| ((ns.to_owned(), name.to_owned()), processor))
+            .collect();
+
+    tokio::spawn(async move {
+        while let Ok(msg) = rx.recv_async().await {
+            let name = format!("{}.{}", msg.namespace, msg.name);
+            tracing::info!("Got request for {name}: {:#?}", msg.args);
+            let processor = match processors.get(&(msg.namespace, msg.name)) {
+                Some(p) => p,
+                None => {
+                    if let Err(e) = msg.res.send(Err(format!("{} not found", name))) {
+                        tracing::warn!("send error: {:?}", e);
+                    };
+                    continue;
+                }
+            };
+            let ret = processor.call(msg.args).await;
+            if let Err(e) = msg.res.send(ret) {
+                tracing::warn!("send error: {:?}", e);
+            }
+        }
+    });
+}
+
 #[cfg(test)]
 mod tests {
+    #[allow(unused_imports)]
     use super::*;
+    #[allow(unused_imports)]
     use anyhow::Result;
+    #[allow(unused_imports)]
     use serde_json::json;
 
+    #[cfg(feature = "builtin_processor")]
     fn auth_create_token(args: JsonValue) -> std::result::Result<JsonValue, String> {
         Ok(args)
     }
 
+    #[cfg(feature = "builtin_processor")]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn js_engine_should_work() -> Result<()> {
         tracing_subscriber::fmt::init();
-        let engine = JsEngine::new(vec![(
+
+        let engine = JsEngine::create_with_processors(vec![(
             "auth",
             "create_token",
-            Box::new(auth_create_token) as Box<dyn Processor>,
+            Box::new(auth_create_token) as Box<dyn crate::Processor>,
         )])?;
         #[cfg(feature = "console")]
         engine

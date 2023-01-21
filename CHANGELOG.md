@@ -9,7 +9,7 @@ All notable changes to this project will be documented in this file.
 - First working version for JsEngine ([0d816b7](0d816b79bff714d9b7b432b5f2267c415a4b7ea7) - 2023-01-21 by Tyr Chen)
 - Make the basic flow work ([d7cd2ab](d7cd2ab70407ed79ede7b104b430a5d886d809e0) - 2023-01-21 by Tyr Chen)
 - Support simple console ([fc8165b](fc8165bd85d357464dd3237be89ad7f347c3d467) - 2023-01-21 by Tyr Chen)
-- Make console an optional feature ([3e7c5be](3e7c5be8eab72722971319aa8e8bc4d26ea6fb31) - 2023-01-21 by Tyr Chen)
+- Make console an optional feature ([a753676](a75367623340506fe0a0d833fcfb7fd283011b64) - 2023-01-21 by Tyr Chen)
 
 ### Refactor
 

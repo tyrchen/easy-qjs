@@ -4,7 +4,7 @@ impl MsgChannel {
     pub fn new(
         namespace: impl Into<String>,
         name: impl Into<String>,
-        args: Option<JsonValue>,
+        args: JsonValue,
     ) -> (Self, flume::Receiver<Result<JsonValue, String>>) {
         let (sender, receiver) = flume::bounded(1);
         (

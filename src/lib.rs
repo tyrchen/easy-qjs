@@ -4,11 +4,15 @@ pub(crate) mod error;
 mod msg_channel;
 mod value;
 
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 pub use error::Error;
 
-pub type Processor = fn(Option<JsonValue>) -> Result<JsonValue, String>;
+#[async_trait]
+pub trait Processor: Send + Sync + 'static {
+    async fn call(&self, args: JsonValue) -> Result<JsonValue, String>;
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct JsonValue(serde_json::Value);
@@ -27,7 +31,17 @@ pub struct MsgChannel {
     /// calling function name
     pub name: String,
     /// args for the calling function
-    pub args: Option<JsonValue>,
+    pub args: JsonValue,
     /// the sender of the response
     pub res: flume::Sender<Result<JsonValue, String>>,
+}
+
+#[async_trait]
+impl<F> Processor for F
+where
+    F: Fn(JsonValue) -> Result<JsonValue, String> + Send + Sync + 'static,
+{
+    async fn call(&self, args: JsonValue) -> Result<JsonValue, String> {
+        (self)(args)
+    }
 }

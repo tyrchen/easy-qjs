@@ -6,7 +6,7 @@ use js::Rest;
 #[allow(non_upper_case_globals)]
 pub mod disp {
     use crate::{JsonValue, MsgChannel};
-    use tracing::warn;
+    use tracing::{info, warn};
 
     #[derive(Clone)]
     pub struct Dispatcher {
@@ -27,12 +27,11 @@ pub mod disp {
             name: String,
             args: JsonValue,
         ) -> Result<JsonValue, js::Error> {
-            println!("!!! dispatch: {} {} {:?}", ns, name, args);
-            let (msg, res) = MsgChannel::new(ns, name, Some(args));
+            info!("dispatch: {} {} {:?}", ns, name, args);
+            let (msg, res) = MsgChannel::new(ns, name, args);
             self.sender
                 .send(msg)
                 .map_err(|_| js::Error::UnrelatedRuntime)?;
-            println!("!!! sent");
             res.recv()
                 .map_err(|e| {
                     warn!("recv error: {:?}", e);

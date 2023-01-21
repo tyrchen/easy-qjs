@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - Make the basic flow work ([d7cd2ab](d7cd2ab70407ed79ede7b104b430a5d886d809e0) - 2023-01-21 by Tyr Chen)
 - Support simple console ([fc8165b](fc8165bd85d357464dd3237be89ad7f347c3d467) - 2023-01-21 by Tyr Chen)
 - Make console an optional feature ([a753676](a75367623340506fe0a0d833fcfb7fd283011b64) - 2023-01-21 by Tyr Chen)
+- Expose the flume receiver to the caller so that they could consume the mssage ([497d309](497d3095b0917eae1409ba0ab58488c9bef9592f) - 2023-01-21 by Tyr Chen)
 
 ### Refactor
 

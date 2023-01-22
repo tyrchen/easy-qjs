@@ -1,6 +1,3 @@
-use crate::JsonValue;
-use js::Rest;
-
 #[js::bind(object, public)]
 #[quickjs(bare)]
 #[allow(non_upper_case_globals)]
@@ -43,11 +40,4 @@ pub(crate) mod disp {
                 })
         }
     }
-}
-
-#[js::bind(object, public)]
-#[quickjs(rename = "fetch")]
-#[allow(unused_variables)]
-pub(crate) async fn fetch(args: Rest<JsonValue>) -> Result<JsonValue, js::Error> {
-    Ok(JsonValue::default())
 }

@@ -5,7 +5,7 @@ use crate::{
 };
 use std::fmt;
 
-use js::{Context, Function, Promise, Tokio};
+use js::{Context, Function, Object, Promise, Tokio};
 use snafu::ResultExt;
 use tracing::debug;
 impl JsEngine {
@@ -37,30 +37,49 @@ impl JsEngine {
         Ok(engine)
     }
 
-    pub async fn run(&self, code: &str) -> Result<JsonValue, Error> {
+    pub async fn run(&self, code: &str, req: JsonValue) -> Result<JsonValue, Error> {
         let ret: Result<Promise<JsonValue>, js::Error> = self.context.with(|ctx| {
-            let src = format!(r#"export default async function() {{ {} }}"#, code);
+            let src = format!(r#"export default async function(req) {{ {} }}"#, code);
             debug!("code to execute: {}", src);
             let m = ctx.compile("script", src)?;
             let fun = m.get::<_, Function>("default")?;
 
-            fun.call(())
+            fun.call((req,))
         });
         ret.context(JsExecuteSnafu)?.await.context(JsExecuteSnafu)
     }
 
+    pub fn load_global_js(&self, name: &str, code: &str) -> Result<()> {
+        let ret: Result<(), js::Error> = self.context.with(|ctx| {
+            let global = ctx.globals();
+            let m = ctx.compile(name, code)?;
+            let obj = m.get::<_, Object>("default")?;
+            for item in obj.into_iter() {
+                let (k, v) = item?;
+                global.set(k, v)?;
+            }
+            Ok(())
+        });
+        ret.context(JsExecuteSnafu)
+    }
+
     fn init_globals(&self) -> Result<(), Error> {
         let ret: Result<(), js::Error> = self.context.with(|ctx| {
-            let glob = ctx.globals();
+            let global = ctx.globals();
             #[cfg(feature = "console")]
             {
                 use crate::builtins::{con::Console, Con};
-                glob.init_def::<Con>()?;
-                glob.set("console", Console)?;
+                global.init_def::<Con>()?;
+                global.set("console", Console)?;
+            }
+            #[cfg(feature = "fetch")]
+            {
+                use crate::builtins::Fetch;
+                ctx.globals().init_def::<Fetch>()?;
             }
 
-            glob.init_def::<Disp>()?;
-            glob.set("dispatcher", Dispatcher::new(self.sender.clone()))?;
+            global.init_def::<Disp>()?;
+            global.set("dispatcher", Dispatcher::new(self.sender.clone()))?;
             Ok(())
         });
         ret.context(JsExecuteSnafu)
@@ -131,10 +150,16 @@ mod tests {
         )])?;
         #[cfg(feature = "console")]
         engine
-            .run("let a = 1;console.log(`hello world ${a}`, a)")
+            .run(
+                "let a = 1;console.log(`hello world ${a}`, a)",
+                JsonValue::null(),
+            )
             .await?;
         let ret = engine
-            .run("return dispatcher.dispatch('auth', 'create_token', {a: 1})")
+            .run(
+                "return dispatcher.dispatch('auth', 'create_token', {a: 1})",
+                JsonValue::null(),
+            )
             .await?;
 
         assert_eq!(ret.0, json!({"a": 1}));

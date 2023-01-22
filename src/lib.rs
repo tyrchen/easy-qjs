@@ -50,6 +50,8 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 pub use error::Error;
+// re-exports
+pub use js;
 
 #[async_trait]
 pub trait Processor: Send + Sync + 'static {
@@ -62,7 +64,7 @@ pub struct JsonValue(serde_json::Value);
 pub struct JsEngine {
     #[allow(dead_code)]
     runtime: js::Runtime,
-    context: js::Context,
+    pub context: js::Context,
     sender: flume::Sender<MsgChannel>,
 }
 

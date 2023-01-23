@@ -1,16 +1,13 @@
-use crate::{
-    builtins::{disp::Dispatcher, Disp},
-    error::*,
-    JsEngine, JsonValue, MsgChannel,
-};
+use crate::{error::*, JsEngine, JsonValue};
 use std::fmt;
 
 use js::{Context, Function, Object, Promise, Tokio};
 use snafu::ResultExt;
 use tracing::debug;
 impl JsEngine {
-    pub fn create() -> Result<(Self, flume::Receiver<MsgChannel>)> {
-        let (tx, rx) = flume::unbounded::<MsgChannel>();
+    #[cfg(feature = "dispatcher")]
+    pub fn create() -> Result<(Self, flume::Receiver<crate::MsgChannel>)> {
+        let (tx, rx) = flume::unbounded::<crate::MsgChannel>();
         let rt = js::Runtime::new().context(JsRuntimeSnafu)?;
         rt.set_max_stack_size(256 * 1024);
         rt.set_memory_limit(2 * 1024 * 1024);
@@ -25,6 +22,23 @@ impl JsEngine {
         };
         engine.init_globals()?;
         Ok((engine, rx))
+    }
+
+    #[cfg(not(feature = "dispatcher"))]
+    pub fn create() -> Result<Self> {
+        let rt = js::Runtime::new().context(JsRuntimeSnafu)?;
+        rt.set_max_stack_size(256 * 1024);
+        rt.set_memory_limit(2 * 1024 * 1024);
+
+        let ctx = Context::full(&rt).context(JsContextSnafu)?;
+        rt.spawn_executor(Tokio);
+
+        let engine = Self {
+            runtime: rt,
+            context: ctx,
+        };
+        engine.init_globals()?;
+        Ok(engine)
     }
 
     #[cfg(feature = "builtin_processor")]
@@ -78,8 +92,12 @@ impl JsEngine {
                 ctx.globals().init_def::<Fetch>()?;
             }
 
-            global.init_def::<Disp>()?;
-            global.set("dispatcher", Dispatcher::new(self.sender.clone()))?;
+            #[cfg(feature = "dispatcher")]
+            {
+                use crate::builtins::{disp::Dispatcher, Disp};
+                global.init_def::<Disp>()?;
+                global.set("dispatcher", Dispatcher::new(self.sender.clone()))?;
+            }
             Ok(())
         });
         ret.context(JsExecuteSnafu)
@@ -92,9 +110,9 @@ impl fmt::Debug for JsEngine {
     }
 }
 
-#[cfg(feature = "builtin_processor")]
+#[cfg(all(feature = "builtin_processor", feature = "dispatcher"))]
 fn run_processors(
-    rx: flume::Receiver<MsgChannel>,
+    rx: flume::Receiver<crate::MsgChannel>,
     processors: Vec<(&str, &str, Box<dyn crate::Processor>)>,
 ) {
     let processors: std::collections::HashMap<(String, String), Box<dyn crate::Processor>> =
@@ -106,7 +124,7 @@ fn run_processors(
     tokio::spawn(async move {
         while let Ok(msg) = rx.recv_async().await {
             let name = format!("{}.{}", msg.namespace, msg.name);
-            tracing::info!("Got request for {name}: {:#?}", msg.args);
+            tracing::info!("Received request for {name}: {:#?}", msg.args);
             let processor = match processors.get(&(msg.namespace, msg.name)) {
                 Some(p) => p,
                 None => {
@@ -164,5 +182,20 @@ mod tests {
 
         assert_eq!(ret.0, json!({"a": 1}));
         Ok(())
+    }
+
+    #[cfg(feature = "fetch")]
+    #[cfg(not(feature = "dispatcher"))]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn fetch_should_work() {
+        let engine = JsEngine::create().expect("valid");
+        let ret = engine
+            .run(
+                "return await fetch('https://httpbin.org/get');",
+                JsonValue::null(),
+            )
+            .await
+            .expect("valid");
+        assert_eq!(ret.0["url"], "https://httpbin.org/get");
     }
 }

@@ -1,7 +1,13 @@
+mod msg_channel;
+
+pub use msg_channel::MsgChannel;
+
 #[js::bind(object, public)]
 #[quickjs(bare)]
 #[allow(non_upper_case_globals)]
 pub(crate) mod disp {
+    use std::time::Duration;
+
     use crate::{JsonValue, MsgChannel};
     use tracing::{info, warn};
 
@@ -27,9 +33,9 @@ pub(crate) mod disp {
             info!("dispatch: {} {} {:?}", ns, name, args);
             let (msg, res) = MsgChannel::new(ns, name, args);
             self.sender
-                .send(msg)
+                .send_timeout(msg, Duration::from_millis(100))
                 .map_err(|_| js::Error::UnrelatedRuntime)?;
-            res.recv()
+            res.recv_timeout(Duration::from_millis(500))
                 .map_err(|e| {
                     warn!("recv error: {:?}", e);
                     js::Error::UnrelatedRuntime

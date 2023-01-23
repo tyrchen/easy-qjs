@@ -2,7 +2,7 @@ build:
 	@BUILD_ICONS=1 cargo build
 
 test:
-	@cargo nextest run --all-features
+	@cargo nextest run
 
 release:
 	@cargo release tag --execute

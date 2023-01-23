@@ -41,10 +41,16 @@
 #![cfg_attr(test, allow(clippy::float_cmp))]
 
 mod builtins;
+mod cancellation;
 mod engine;
 pub(crate) mod error;
-mod msg_channel;
+
 mod value;
+
+use std::{
+    sync::{atomic::AtomicBool, Arc},
+    time::Instant,
+};
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -65,21 +71,20 @@ pub struct JsEngine {
     #[allow(dead_code)]
     runtime: js::Runtime,
     pub context: js::Context,
+    #[cfg(feature = "dispatcher")]
     sender: flume::Sender<MsgChannel>,
 }
 
-#[derive(Debug)]
-pub struct MsgChannel {
-    /// the namespace of the calling function
-    pub namespace: String,
-    /// calling function name
-    pub name: String,
-    /// args for the calling function
-    pub args: JsonValue,
-    /// the sender of the response
-    pub res: flume::Sender<Result<JsonValue, String>>,
+#[derive(Debug, Clone, Default)]
+pub struct Cancellation {
+    deadline: Option<Instant>,
+    cancellation: Arc<AtomicBool>,
 }
 
+#[cfg(feature = "dispatcher")]
+pub use builtins::dispatcher::MsgChannel;
+
+#[cfg(feature = "dispatcher")]
 #[async_trait]
 impl<F> Processor for F
 where

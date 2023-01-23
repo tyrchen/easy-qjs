@@ -1,11 +1,13 @@
 #[cfg(feature = "console")]
-mod console;
-mod dispatcher;
+pub(crate) mod console;
+#[cfg(feature = "dispatcher")]
+pub(crate) mod dispatcher;
 #[cfg(feature = "fetch")]
-mod fetch;
+pub(crate) mod fetch;
 
 #[cfg(feature = "console")]
 pub(crate) use console::*;
+#[cfg(feature = "dispatcher")]
 pub(crate) use dispatcher::*;
 #[cfg(feature = "fetch")]
 pub(crate) use fetch::*;

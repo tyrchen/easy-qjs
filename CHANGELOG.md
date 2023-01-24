@@ -12,6 +12,8 @@ All notable changes to this project will be documented in this file.
 - Make console an optional feature ([a753676](a75367623340506fe0a0d833fcfb7fd283011b64) - 2023-01-21 by Tyr Chen)
 - Expose the flume receiver to the caller so that they could consume the mssage ([497d309](497d3095b0917eae1409ba0ab58488c9bef9592f) - 2023-01-21 by Tyr Chen)
 - Allow passing args for js script ([9764a61](9764a6177e6a7b2e3823f92cd29d29c539cc5511) - 2023-01-22 by Tyr Chen)
+- Make dispatcher optional ([05fbe4a](05fbe4a5cf71317bd26f32ef39aa86fd2fb20248) - 2023-01-23 by Tyr Chen)
+- Make dispatcher optional ([b49b350](b49b3504ee3e0e64da7ce5cf7160b0fa392a0b49) - 2023-01-24 by Tyr Chen)
 
 ### Refactor
 
